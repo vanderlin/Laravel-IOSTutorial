@@ -252,7 +252,6 @@ Setup the cell.
     
     // get the note
     NSDictionary * note = [notes objectAtIndex:indexPath.row];
-    NSLog(@"note %@", note);
     
    // create a date formatter so we can display the date
     NSDateFormatter * df = [[NSDateFormatter alloc] init];
@@ -277,6 +276,52 @@ Setup the cell.
     return cell;
 }
 ```
+
+At this point we are loading the `Notes` and able to display them in our tableview -Yeah! Now we need to make some notes.
+
+# Create Notes
+Lets add right bar button item that will launch a note creator view. 
+
+**Add the bar button**
+In the `viewDidLoad` add the following code. 
+```
+ UIBarButtonItem * noteButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+                                                                                 target:self
+                                                                                 action:@selector(openNoteCreator:)];
+    self.navigationItem.rightBarButtonItem = noteButton;
+```
+
+And add this function
+```
+-(void)openNoteCreator:(id)sender {
+    
+}
+```
+
+Run the app and you will see a (+) icon in the top right. Let create the `NoteCreatorController`. Like before create a new class that subclasses a `UIViewController`.
+
+Connect the `NoteCreatorController` in the `NotesController`.
+
+Import the class
+** NotesController.m**
+`#import "NoteCreatorController.h"`
+
+Update the `openNoteCreator` method.
+```
+-(void)openNoteCreator:(id)sender {
+    NoteCreatorController * noteVC = [[NoteCreatorController alloc] init];
+    [self.navigationController presentViewController:noteVC animated:YES completion:nil];
+}
+```
+
+### Build the note creator
+We need a few things in the class. Buttons to close the modal and save the note as well a textview to write the note. 
+
+
+
+
+
+
 
 
 
