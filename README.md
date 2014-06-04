@@ -54,7 +54,7 @@ class NotesController extends \BaseController {
 
 	// GET
 	public function index() {
-		return Note::all();
+		return Response::json(['notes'=>Note::all()]);
 	}
 
 	// POST
@@ -96,13 +96,13 @@ class NotesController extends \BaseController {
 
 Looking at your routes `php artisan routes` you can see how to all the URIs.
 
-**POST** a new `Note`. Add the key `body` and value `my new note`.
+**POST** a new `Note`. Add the key `body` and value `my new note`.		
 http://laraveldemo:8888/notes
 
-**GET** all the `Notes`. 
+**GET** all the `Notes`. 	
 http://localhost:8888/notes
 
-**DELETE** a `Note`.
+**DELETE** a `Note`.	
 http://localhost:8888/notes/1
 
 # IOS
@@ -113,13 +113,13 @@ Delete everything in the `Main.storyboard`. Select the file and hit *(⌘+a) the
 Delete the `ViewController.h` and `ViewController.m` files.
 
 ### Create NotesController
-File new. *(⌘+n)*
-Cocoa Touch -> Objective-C class
+File new. *(⌘+n)*	
+Cocoa Touch -> Objective-C class	
+Click Next			
+Class: NotesController	
+Subclass of: UITableViewController			
 Click Next		
-Class: NotesController
-Subclass of: UITableViewController		
-Click Next	
-Create
+Create	
 
 Click on the `Main.storyboard` and drag a new `Table View Controller` to the stage. With the Controller selected third button at the top of the inspector. Set the `Custom Class` to `NotesController`. Now in the top menu click *Editor -> Embed In -> Navigation Controller*
 
@@ -128,31 +128,35 @@ Hit  *(⌘+r)* and test the app. Everything should be connected and you should s
 ### Load the data from the server
 We are going to write all the loading functions in the `AppDelegate` this is good practice so that we can access these functions throughout the app.
 
-In the `AppDelegate.h` add  `#define BASE_URL @"http://localhost:8888"` this will save us from having to type this a bunch and easy to set for production.
+In the `AppDelegate.h` add  `#define BASE_URL @"http://localhost:8888"` this will save us from having to type this a bunch and easy to set for production.	
 
-**Singleton AppDelegate**
+**Singleton AppDelegate**	
 This is a nice helper function to get the `AppDelegate` instance. Create this static method.
 
-**AppDelegate.h**
-`+(AppDelegate*)getInstance;`
+**AppDelegate.h**	
+`+(AppDelegate*)getInstance;`	
 
-**Load Notes**
+**Load Notes**	
 ```
 +(AppDelegate*)getInstance {
     return (AppDelegate*)[[UIApplication sharedApplication] delegate];
 }
 ```
+	
+We can now call this simply by typing `[AppDelegate getInstance]`	
 
-We can now call this simply by typing `[AppDelegate getInstance]`
+Lets make a function that will load any url with a http method. We also want to have a callback for when the data is done loading. We are going to use a `Block`.
 
-Lets make a function that will load any url with a method. 
-in your `AppDelegate.h` add this function.
-`-(void)makeRequest:(NSString*)urlString method:(NSString*)method;`
+in your `AppDelegate.h` create a `typedef` of the `Block`.	
+`typedef void(^RequestBlock)(NSDictionary*data);`
 
-in `AppDelegate.m`
+add this function.	
+`-(void)makeRequest:(NSString*)urlString method:(NSString*)method onComplete:(RequestBlock)callback;`
+
+**AppDelegate.m**	
 ```
--(void)makeRequest:(NSString *)urlString method:(NSString *)method {
-    
+-(void)makeRequest:(NSString*)urlString method:(NSString*)method onComplete:(RequestBlock)callback {
+
     // create the url
     NSURL * url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/%@", BASE_URL, urlString]];
     NSMutableURLRequest * request = [[NSMutableURLRequest alloc] initWithURL:url];
@@ -169,67 +173,10 @@ in `AppDelegate.m`
                                if(data && data.length > 0) {
                                    
                                    NSDictionary * json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:nil];
-                                   NSLog(@"json %@", json);
-                               }
-                               
-                           }];
-    
-}
-```
-
-Now lets test this function. In `AppDelegate.m` `didFinishLaunchingWithOptions` add the function to load all the notes.
-
-`[self makeRequest:@"notes" method:@"GET"];`
-
-Run & Build. You will see output in the console of the a `NSDictionary` of all the notes. 
-
-# Requesting Data Delegate
-This request is happening  [asynchronously](https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=define+asynchronous+loading). We need a way to know that the data has finished loading. Lets create a delegate for making a request.
- 
-At the top of the `AppDelegate.h` file create a `@protocol` called `RequestDelegate`.
-
-```
-@protocol RequestDelegate <NSObject>
-@optional
--(void)didFinishRequestingData:(NSDictionary*)data;
-@end
-```
-
-We created a optional method that we can listen to. It will pass us a `NSDictionary` of the data when the request is finished.
-
-Add a `delegate` property to the `AppDelegate` and `@synthesize` it.
-
-In AppDelegate.h
-`@property (strong, nonatomic) id <RequestDelegate> delegate;`
-
-In AppDelegate.m
-`@synthesize delegate;`
-
-In `AppDelegate.m` we need to execute this function when the request is finished.  
-The `makeRequest` should look like this now.
-
-```
--(void)makeRequest:(NSString *)urlString method:(NSString *)method {
-    
-    // create the url
-    NSURL * url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/%@", BASE_URL, urlString]];
-    NSMutableURLRequest * request = [[NSMutableURLRequest alloc] initWithURL:url];
-    
-    // set the method (GET/POST/PUT/UPDATE/DELETE)
-    [request setHTTPMethod:method];
-    
-    // submit the request
-    [NSURLConnection sendAsynchronousRequest:request
-                                       queue:[NSOperationQueue mainQueue]
-                           completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
-
-                               // do we have data?
-                               if(data && data.length > 0) {
-                                   
-                                   NSDictionary * json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:nil];
-                                   
-                                   if(delegate && [delegate respondsToSelector:@selector(didFinishRequestingData:)]) {
-                                       [delegate performSelector:@selector(didFinishRequestingData:) withObject:json];
+                                  
+                                   // if we have a block lets pass it
+                                   if(callback) {
+                                       callback(json);
                                    }
                                    
                                }
@@ -239,34 +186,100 @@ The `makeRequest` should look like this now.
 }
 ```
 
-# Connect Notes Controller
-Click on the `NotesController.h` and first include the `AppDelegate.h` at the top of the file.
+Now lets test this function. In `AppDelegate.m`	 `didFinishLaunchingWithOptions` add the function to load all the notes.
 
-Add the `RequestDelegate` to the `NotesController` .
+```
+    [self makeRequest:@"notes" method:@"GET" onComplete:^(NSDictionary *data) {
+        NSLog(@"Json Loaded: %@", data);
+    }];
+```
+Run & Build. You will see output in the console of the a `NSDictionary` of all the notes. 
+
+# Load Notes - NotesController
+
+First include the `AppDelegate` in the `NotesController`
 
 **NotesController.h**
-```
-#import <UIKit/UIKit.h>
-#import "AppDelegate.h"
+`#import "AppDelegate.h"`
 
-@interface NotesController : UITableViewController <RequestDelegate>
-
-@end
-```
-Add the `didFinishedRequestingData` to the class and tell the `AppDelegate` that this class is the `RequestDelegate`.
+We want to have a `NSMutableArray` of all the notes. 
+**NotesController.h**
+`@property (strong, nonatomic) NSMutableArray * notes;`
 **NotesController.m**
+`@synthesize notes;`
+
+Load the notes when the view loads.
 ```
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    [AppDelegate getInstance].delegate = self;
-}
+    [[AppDelegate getInstance] makeRequest:@"notes" method:@"GET" onComplete:^(NSDictionary *data) {
 
--(void)didFinishRequestingData:(NSDictionary *)data {
-    
+        if([data objectForKey:@"notes"]) {
+            notes = [NSMutableArray arrayWithArray:[data objectForKey:@"notes"]];
+
+            // now reload the tableview
+            [self.tableView reloadData];
+        }
+        
+    }];
 }
+```
+
+**Setup The TableView**
+Now that we have the data loaded we can set the sections and number of rows.
 
 ```
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return notes ? 1 : 0; // safe way to not load rows if notes is nil
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return notes.count;
+}
+```
+
+Setup the cell.
+```
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+   
+    static NSString * cellID = @"NOTES_CELL";
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellID];
+    
+    if(cell == nil) {
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:cellID];
+    }
+    
+    // get the note
+    NSDictionary * note = [notes objectAtIndex:indexPath.row];
+    NSLog(@"note %@", note);
+    
+   // create a date formatter so we can display the date
+    NSDateFormatter * df = [[NSDateFormatter alloc] init];
+    [df setDateFormat:@"yyyy-MM-dd H:mm:ss"];
+    
+    // make a date object from the timestamp
+    NSDate * date = [df dateFromString:[note objectForKey:@"created_at"]];
+
+    // change the format weekday/month/day/year
+    [df setDateFormat:@"EE MMM d yyyy"];
+    NSString * dateStr = [df stringFromDate:date];
+
+    // change the format hour:min
+    [df setDateFormat:@"h:mm a"];
+    NSString * timeStr = [df stringFromDate:date];
+
+    // update the cell
+    cell.textLabel.text = dateStr;
+    cell.detailTextLabel.text = timeStr;
+    
+    
+    return cell;
+}
+```
+
+
+
 
 
 
