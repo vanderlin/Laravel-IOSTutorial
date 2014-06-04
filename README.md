@@ -130,7 +130,20 @@ We are going to write all the loading functions in the `AppDelegate` this is goo
 
 In the `AppDelegate.h` add  `#define BASE_URL @"http://localhost:8888"` this will save us from having to type this a bunch and easy to set for production.
 
+**Singleton AppDelegate**
+This is a nice helper function to get the `AppDelegate` instance. Create this static method.
+
+**AppDelegate.h**
+`+(AppDelegate*)getInstance;`
+
 **Load Notes**
+```
++(AppDelegate*)getInstance {
+    return (AppDelegate*)[[UIApplication sharedApplication] delegate];
+}
+```
+
+We can now call this simply by typing `[AppDelegate getInstance]`
 
 Lets make a function that will load any url with a method. 
 in your `AppDelegate.h` add this function.
@@ -173,12 +186,12 @@ Run & Build. You will see output in the console of the a `NSDictionary` of all t
 # Requesting Data Delegate
 This request is happening  [asynchronously](https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=define+asynchronous+loading). We need a way to know that the data has finished loading. Lets create a delegate for making a request.
  
-At the top of the `AppDelegate.h` file create a `@protocal` called `RequestDelegate`.
+At the top of the `AppDelegate.h` file create a `@protocol` called `RequestDelegate`.
 
 ```
 @protocol RequestDelegate <NSObject>
 @optional
--(void)didFinishedRequestingData:(NSDictionary*)data;
+-(void)didFinishRequestingData:(NSDictionary*)data;
 @end
 ```
 
@@ -186,15 +199,11 @@ We created a optional method that we can listen to. It will pass us a `NSDiction
 
 Add a `delegate` property to the `AppDelegate` and `@synthesize` it.
 
-```
-AppDelegate.h
-@property (strong, nonatomic) id <RequestDelegate> delegate;
-```
+In AppDelegate.h
+`@property (strong, nonatomic) id <RequestDelegate> delegate;`
 
-```
-AppDelegate.m
-@synthesize delegate;
-```
+In AppDelegate.m
+`@synthesize delegate;`
 
 In `AppDelegate.m` we need to execute this function when the request is finished.  
 The `makeRequest` should look like this now.
@@ -219,8 +228,8 @@ The `makeRequest` should look like this now.
                                    
                                    NSDictionary * json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:nil];
                                    
-                                   if(delegate && [delegate respondsToSelector:@selector(didFinishedRequestingData:)]) {
-                                       [delegate performSelector:@selector(didFinishedRequestingData:) withObject:json];
+                                   if(delegate && [delegate respondsToSelector:@selector(didFinishRequestingData:)]) {
+                                       [delegate performSelector:@selector(didFinishRequestingData:) withObject:json];
                                    }
                                    
                                }
@@ -229,6 +238,39 @@ The `makeRequest` should look like this now.
     
 }
 ```
+
+# Connect Notes Controller
+Click on the `NotesController.h` and first include the `AppDelegate.h` at the top of the file.
+
+Add the `RequestDelegate` to the `NotesController` .
+
+**NotesController.h**
+```
+#import <UIKit/UIKit.h>
+#import "AppDelegate.h"
+
+@interface NotesController : UITableViewController <RequestDelegate>
+
+@end
+```
+Add the `didFinishedRequestingData` to the class and tell the `AppDelegate` that this class is the `RequestDelegate`.
+**NotesController.m**
+```
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    [AppDelegate getInstance].delegate = self;
+}
+
+-(void)didFinishRequestingData:(NSDictionary *)data {
+    
+}
+
+```
+
+
+
+
 
 
 
