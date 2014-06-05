@@ -75,10 +75,12 @@ class NotesController extends \BaseController {
 	// PUT
 	public function update($id) {
 		$note = Note::find($id);
-		$note->body = Input::get('body', 'empty note');
-		$note->save();
-		
-		return Response::json($note);
+		if(Input::has('body')) {
+			$note->body = Input::get('body', 'empty note');
+			$note->save();
+			return Response::json(['note'=>$note, 'message'=>'Note Updated']);
+		}
+		return Response::json(['note'=>$note, 'message'=>'No Body Sent']);
 	}
 
 	// DELETE 
@@ -90,6 +92,8 @@ class NotesController extends \BaseController {
 
 }
 ```
+
+>	**Note:** Most browsers/clients do not understand the PUT/UPDATE/DELETE methods. Laravel will accept a parameter named`_method` and interrupt this with the correct function to call. i.e `_method="PUT"`.
 
 # Test the API.
 - In [Chrome](https://www.google.com/intl/en-US/chrome/browser/) get the app called [PostMan](https://chrome.google.com/webstore/detail/postman-rest-client/fdmmgilgnpjigdojojpjoooidkmcomcm?hl=en) this is a nice little REST app for Chrome that allows you to test all the verbs for you API.
@@ -479,7 +483,181 @@ Now when we close the `NoteCreatorController` we can call the `addNewNote` when 
 }
 ```
 
+Looks good we are now adding a new cell and saving our new note to the database. 
 
+# Edit/Delete a note
+Lets add a way to edit and delete a note. First a `weak` reference of a `NSDictionary` note in the `NoteCreatorController`. We do this so that when we tap on a `TableViewCell` we pass the note and can update the text in the `NoteCreatorController`.
+
+In `NoteCreatorController.h`
+@property (weak, nonatomic) NSDictionary * noteRef;		
+In `NoteCreatorController.m`		
+`@synthesize noteRef;`		
+
+We want to modify the `ViewDidLoad` to check if we have a `noteRef`. If we have a note we set the text else we show the keyboard.		
+```
+ if(noteRef == nil) {
+        [noteTextView becomeFirstResponder];
+    }
+    else {
+        noteTextView.text = noteTextView.text;
+    }
+```
+
+Now in our `NotesController` we add the method.	
+```
+-(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    
+    NSDictionary * note = [notes objectAtIndex:indexPath.row];
+    
+    NoteCreatorController * noteVC = [[NoteCreatorController alloc] init];
+    noteVC.notesControllerRef = self;
+    noteVC.noteRef = note;
+    
+    [self.navigationController presentViewController:noteVC animated:YES completion:nil];
+
+}
+```
+
+Create a update Cell method in `NoteController`. 
+```
+-(void)updateNote:(NSDictionary *)note {
+    
+    NSInteger foundIndex = -1;
+    
+    // find the note we just updated
+    for (NSInteger i=0; i<notes.count; i++) {
+        NSDictionary * n = [notes objectAtIndex:i];
+        if([[n objectForKey:@"id"] isEqualToString:[note objectForKey:@"id"]]) {
+            foundIndex = i;
+            break;
+        }
+    }
+    
+    // did we find a note - replace with updated note
+    if(foundIndex != -1) {
+        [notes replaceObjectAtIndex:foundIndex withObject:note];
+        [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:foundIndex inSection:0]] withRowAnimation:UITableViewRowAnimationFade];
+    }
+    
+}
+```
+
+Now when we open this `Note` in the `NotesCreatorController` we want to update the note and not save it as a new note. Lets modify our `save` function  to the following. 	
+
+```
+-(void)save {
+    
+    // if the keyboard is up dismiss it
+    if([noteTextView isFirstResponder]) {
+        [noteTextView resignFirstResponder];
+    }
+    
+    NSString * body = noteTextView.text;
+    
+    // if we have a note ref then update else save the note
+    
+    if(noteRef) {
+        
+        // We first create the path notes/{note id}
+        // The verbs PUT/UPDATE/DELETE are not supported
+        // with most browsers/clients so we need to pass
+        // a _method. Laravel knows how to interespt this
+        // into the correct method.
+        
+        NSString * noteURL = [NSString stringWithFormat:@"notes/%@", [noteRef objectForKey:@"id"]];
+        [[AppDelegate getInstance] makeRequest:noteURL
+                                        method:@"POST"
+                                        params:@{@"body": body, @"_method": @"PUT"}
+                                    onComplete:^(NSDictionary *data) {
+                                        
+                                        // we need to dismiss the view controller
+                                        // and update the tableview in NotesController
+                                        [self dismissViewControllerAnimated:YES completion:^{
+                                            [notesControllerRef updateNote:[data objectForKey:@"note"]];
+                                        }];
+                                        
+                                    }];
+        
+    }
+    else {
+        [[AppDelegate getInstance] makeRequest:@"notes"
+                                        method:@"POST"
+                                        params:@{@"body": body}
+                                    onComplete:^(NSDictionary *data) {
+                                        
+                                        // we need to dismiss the view controller
+                                        // and update the tableview in NotesController
+                                        [self dismissViewControllerAnimated:YES completion:^{
+                                            [notesControllerRef addNewNote:[data objectForKey:@"note"]];
+                                        }];
+                                        
+                                    }];
+    }
+    
+}
+```
+
+>	**Note:** Most browsers/clients do not understand the PUT/UPDATE/DELETE methods. Laravel will accept a parameter named`_method` and interrupt this with the correct function to call. i.e `_method="PUT"`.
+ 
+Awesome, we are now updating our Notes, time to delete a note. Lets add a delete button to our toolbar in the `NotesCreatorController` and create a `deleteNote` method.
+
+In `NotesCreatorController.m`		
+`    UIBarButtonItem * deleteBtn = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemTrash target:self action:@selector(deleteNote)];`
+
+We also need a `removeNote` in our `NotesController`. Create this function.
+
+** NotesController.h**`	
+`-(void)removeNote:(NSDictionary*)note;`
+
+** NotesController.m**`	
+```
+-(void)removeNote:(NSDictionary *)note {
+    
+    NSInteger foundIndex = -1;
+    
+    // find the note we just updated
+    for (NSInteger i=0; i<notes.count; i++) {
+        NSDictionary * n = [notes objectAtIndex:i];
+        if([[n objectForKey:@"id"] isEqualToString:[note objectForKey:@"id"]]) {
+            foundIndex = i;
+            break;
+        }
+    }
+    
+    // did we find a note - remove this note
+    if(foundIndex != -1) {
+        [notes removeObjectAtIndex:foundIndex];
+        [self.tableView deleteRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:foundIndex inSection:0]] withRowAnimation:UITableViewRowAnimationFade];
+    }
+
+}
+```
+
+Back in the `NotesCreatorController.m` we need to create the `deleteNote` function and call the `removeNote` method in our `UITableView`.	 We can pretty much copy and past from our update method and change it to `DELETE`.
+
+```
+-(void)deleteNote {
+    NSString * noteURL = [NSString stringWithFormat:@"notes/%@", [noteRef objectForKey:@"id"]];
+    [[AppDelegate getInstance] makeRequest:noteURL
+                                    method:@"POST"
+                                    params:@{@"_method": @"DELETE"}
+                                onComplete:^(NSDictionary *data) {
+                                    
+                                    // we need to dismiss the view controller
+                                    // and update the tableview in NotesController
+                                    [self dismissViewControllerAnimated:YES completion:^{
+                                        [notesControllerRef removeNote:[data objectForKey:@"note"]];
+                                    }];
+                                    
+                                }];
+
+}
+```
+
+At this point we should be creating, updating, and deleting notes. This is a good start for making an app connected to a REST API. You can build on this and really make something awesome!
+
+Thanks,		
+T		
  
 
 
