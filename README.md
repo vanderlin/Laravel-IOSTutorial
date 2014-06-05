@@ -150,12 +150,12 @@ Lets make a function that will load any url with a http method. We also want to 
 in your `AppDelegate.h` create a `typedef` of the `Block`.	
 `typedef void(^RequestBlock)(NSDictionary*data);`
 
-add this function.	
-`-(void)makeRequest:(NSString*)urlString method:(NSString*)method onComplete:(RequestBlock)callback;`
+This function can take a url that we want to load, params saved in a dictionary as key value pairs and a callback function. Add this to `AppDelegate.h`
+`-(void)makeRequest:(NSString*)urlString method:(NSString*)method params:(NSDictionary*)params onComplete:(RequestBlock)callback;`
 
 **AppDelegate.m**	
 ```
--(void)makeRequest:(NSString*)urlString method:(NSString*)method onComplete:(RequestBlock)callback {
+-(void)makeRequest:(NSString*)urlString method:(NSString*)method params:(NSDictionary*)params onComplete:(RequestBlock)callback {
 
     // create the url
     NSURL * url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/%@", BASE_URL, urlString]];
@@ -163,6 +163,16 @@ add this function.
     
     // set the method (GET/POST/PUT/UPDATE/DELETE)
     [request setHTTPMethod:method];
+    
+   // if we have params pull out the key/value and add to header
+    if(params != nil) {
+        NSMutableString * body = [[NSMutableString alloc] init];
+        for (NSString * key in params.allKeys) {
+            NSString * value = [params objectForKey:key];
+            [body appendFormat:@"%@=%@&", key, value];
+        }
+        [request setHTTPBody:[body dataUsingEncoding:NSUTF8StringEncoding]];
+    }
     
     // submit the request
     [NSURLConnection sendAsynchronousRequest:request
@@ -186,10 +196,10 @@ add this function.
 }
 ```
 
-Now lets test this function. In `AppDelegate.m`	 `didFinishLaunchingWithOptions` add the function to load all the notes.
+Now lets test this function. In `AppDelegate.m`	 `didFinishLaunchingWithOptions` add the function to load all the notes. Note: If we have no params to pass just pass `nil`.
 
 ```
-    [self makeRequest:@"notes" method:@"GET" onComplete:^(NSDictionary *data) {
+    [self makeRequest:@"notes" params:nil method:@"GET" onComplete:^(NSDictionary *data) {
         NSLog(@"Json Loaded: %@", data);
     }];
 ```
@@ -213,7 +223,7 @@ Load the notes when the view loads.
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    [[AppDelegate getInstance] makeRequest:@"notes" method:@"GET" onComplete:^(NSDictionary *data) {
+    [[AppDelegate getInstance] makeRequest:@"notes" params:nil method:@"GET" onComplete:^(NSDictionary *data) {
 
         if([data objectForKey:@"notes"]) {
             notes = [NSMutableArray arrayWithArray:[data objectForKey:@"notes"]];
@@ -285,7 +295,7 @@ Lets add right bar button item that will launch a note creator view.
 **Add the bar button**
 In the `viewDidLoad` add the following code. 
 ```
- UIBarButtonItem * noteButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+ UIBarButtonItem * noteButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCompose
                                                                                  target:self
                                                                                  action:@selector(openNoteCreator:)];
     self.navigationItem.rightBarButtonItem = noteButton;
@@ -298,7 +308,7 @@ And add this function
 }
 ```
 
-Run the app and you will see a (+) icon in the top right. Let create the `NoteCreatorController`. Like before create a new class that subclasses a `UIViewController`.
+Run the app and you will see a compose icon in the top right. Let create the `NoteCreatorController`. Like before create a new class that subclasses a `UIViewController`.
 
 Connect the `NoteCreatorController` in the `NotesController`.
 
@@ -316,6 +326,162 @@ Update the `openNoteCreator` method.
 
 ### Build the note creator
 We need a few things in the class. Buttons to close the modal and save the note as well a textview to write the note. 
+
+Create a close function. 
+```
+-(void)close {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+```
+
+Create a save function *(we will fill this in later)*
+```
+-(void)save {
+    
+}
+```
+
+Create button to call these two methods. You will create them in the `viewDidLoad` method.
+
+```
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    
+    self.view.backgroundColor = [UIColor whiteColor];
+    
+    UIToolbar * toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 64)];
+    
+    
+    // close button
+    UIBarButtonItem * closeBtn = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(close)];
+
+    // spacer
+    UIBarButtonItem * spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+
+    // save button
+    UIBarButtonItem * saveBtn = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSave target:self action:@selector(save)];
+    
+    // set the items for toolbar
+    toolbar.items = @[closeBtn, spacer, saveBtn];
+    
+    [self.view addSubview:toolbar];
+    
+}
+```
+
+**The TextView**
+We need a `UITextView` and have this controller respond to the `UITextView` protocol. 
+
+**NoteCreatorController.h**
+```
+@interface NoteCreatorController : UIViewController <UITextViewDelegate>
+
+@property (strong, nonatomic) UITextView * textView;
+
+@end
+```
+
+**NoteCreatorController.m**
+`@synthesize noteTextView;`
+Add this to the `viewDidLoad` method.
+```
+   noteTextView = [[UITextView alloc] initWithFrame:CGRectMake(20, 70, self.view.frame.size.width-40, 170)];
+    noteTextView.backgroundColor = [UIColor lightGrayColor];
+    noteTextView.delegate = self;
+    [self.view addSubview:noteTextView];
+
+    // auto launch the keyboard
+    [noteTextView becomeFirstResponder];
+```
+
+**Save Data**
+Lets fill out the `save` method. First import the `AppDelegate` in you `NoteCreatorController.m`. We want to dismiss the keyboard, grab the text from the `UITextView` and save it with our `makeRequest` method.
+
+Save the data:	
+```
+-(void)save {
+    
+    // if the keyboard is up dismiss it
+    if([noteTextView isFirstResponder]) {
+        [noteTextView resignFirstResponder];
+    }
+    
+    NSString * body = noteTextView.text;
+    
+    // save this data
+    [[AppDelegate getInstance] makeRequest:@"notes"
+                                    method:@"POST"
+                                    params:@{@"body": body}
+                                onComplete:^(NSDictionary *data) {
+                                    
+                                    // we need to dismiss the view controller
+                                    // and update the tableview in NotesController
+                                    
+                                }];
+    
+}
+```
+
+**Close the Notes Creator & Update TableView**	
+In order to update the `NotesController` we need a reference to the instance of this controller. Lets create a function in `NotesController	` that will update the `UITableView` with a new note.
+
+In `NotesController.h` add:	
+`-(void)addNewNote:(NSDictionary*)note;`	
+
+In `NotesController.m` add:	
+```
+code
+```
+
+In the `NoteCreatorController` we need a `weak` reference to the `NotesController`. 	
+
+In `NoteCreatorController.h` add:	
+`@property (weak, nonatomic) NotesController * notesControllerRef;`	
+	
+In `NoteCreatorController.m` add:	
+`@synthesize notesControllerRef;`	
+
+In the `openNoteCreator` method add the reference. 	
+```
+-(void)openNoteCreator:(id)sender {
+    NoteCreatorController * noteVC = [[NoteCreatorController alloc] init];
+    noteVC.notesControllerRef = self;
+    [self.navigationController presentViewController:noteVC animated:YES completion:nil];
+}
+```	
+
+Now when we close the `NoteCreatorController` we can call the `addNewNote` when the animation is complete. Our `save` method now looks like this.	
+```
+-(void)save {
+    
+    // if the keyboard is up dismiss it
+    if([noteTextView isFirstResponder]) {
+        [noteTextView resignFirstResponder];
+    }
+    
+    NSString * body = noteTextView.text;
+    
+    // save this data
+    [[AppDelegate getInstance] makeRequest:@"notes"
+                                    method:@"POST"
+                                    params:@{@"body": body}
+                                onComplete:^(NSDictionary *data) {
+                                    
+                                    // we need to dismiss the view controller
+                                    // and update the tableview in NotesController
+                                    [self dismissViewControllerAnimated:YES completion:^{
+                                        [notesControllerRef addNewNote:[data objectForKey:@"note"]];
+                                    }];
+                                    
+                                }];
+    
+}
+```
+
+
+ 
+
 
 
 
